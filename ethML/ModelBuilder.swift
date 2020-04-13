@@ -34,15 +34,29 @@ class ModelBuilder: NSObject {
     }
     
     func initializeModel() {
-        do {
-            let documentsURL = try FileManager.default.url(for: .documentDirectory, in: .userDomainMask, appropriateFor: nil, create: false)
-            let compiledUrl = documentsURL.appendingPathComponent("(A Document Being Saved By ethML)", isDirectory: true).appendingPathComponent("latest.mlmodelc", isDirectory: false)
-            self.model = try MLModel(contentsOf: compiledUrl)
-            delegate?.localModelPrepared()
-        } catch {
-            print("No local model, retrieving it.")
-            updateModel(url: "https://github.com/rncrosby/rncrosby.github.io/raw/master/eth/latest.mlmodel")
-        }
+            // check tmp (sim runs in doc, physical saves in tmp?)
+            let tmp = FileManager.default.temporaryDirectory.appendingPathComponent("(A Document Being Saved By ethML)", isDirectory: true).appendingPathComponent("latest.mlmodelc", isDirectory: false)
+            if FileManager.default.fileExists(atPath: tmp.path) {
+                do {
+                    self.model = try MLModel(contentsOf: tmp)
+                    delegate?.localModelPrepared()
+                } catch {
+                    print("error training")
+                }
+                
+            } else {
+                print("Not in temp, checking documents")
+                do {
+                    // check tmp (sim runs in doc, physical saves in tmp?)
+                    let documentsURL = try FileManager.default.url(for: .documentDirectory, in: .userDomainMask, appropriateFor: nil, create: false)
+                    let compiledUrl = documentsURL.appendingPathComponent("(A Document Being Saved By ethML)", isDirectory: true).appendingPathComponent("latest.mlmodelc", isDirectory: false)
+                    self.model = try MLModel(contentsOf: compiledUrl)
+                    delegate?.localModelPrepared()
+                } catch {
+                    print("No local model, retrieving it.")
+                    updateModel(url: "https://github.com/rncrosby/rncrosby.github.io/raw/master/eth/latest.mlmodel")
+                }
+            }
     }
 
     func updateModel(url: String) {
@@ -153,10 +167,9 @@ class ModelBuilder: NSObject {
                     do {
                         let string = try String(contentsOf: path, encoding: String.Encoding.utf8)
                         let data = string.components(separatedBy: "\n")
-                        var randoms = [Int]()
                         var count = 0
+                        var temp = [HistoricalPrediction]()
                         while count < 20 {
-                            randoms.append(count)
                             count+=1
                             let parsed = data[count].components(separatedBy: ",")
                             let date = "\(parsed[0]),\(parsed[1])"
@@ -169,9 +182,10 @@ class ModelBuilder: NSObject {
                             let cap_change = Double.init(parsed[8].replacingOccurrences(of: "\r", with: ""))
                             let prediction = self.makePrediction(open: open!, cap: cap!, priceChange: value_change!, volumeChange: volume_change!, capChange: cap_change!)
                             if (prediction != nil) {
-                                 self.predictions.append(HistoricalPrediction.init(date: date, open: open!, actual: close!, predicted: prediction!))
+                                 temp.append(HistoricalPrediction.init(date: date, open: open!, actual: close!, predicted: prediction!))
                             }
                         }
+                        self.predictions = temp
                         self.delegate?.historicalDataPrepared()
                     } catch {
                         print("something went wrong")

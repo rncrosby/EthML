@@ -63,6 +63,7 @@ class ViewController: UIViewController,UITableViewDelegate,UITableViewDataSource
         self.table.dataSource = self
         self.table.separatorStyle = .none
         self.table.backgroundColor = .clear
+        self.table.showsVerticalScrollIndicator = false
 //        self.table.scrollIndicatorInsets = UIEdgeInsets.init(top: self.view.safeAreaInsets.top+240+200+108, left: 0, bottom: 0, right: 0)
         self.view.addSubview(self.table)
         super.viewDidLoad()
@@ -136,8 +137,8 @@ class ViewController: UIViewController,UITableViewDelegate,UITableViewDataSource
         self.isReloadingModel = true
         updatingLabel("RETRAINING MODEL")
         UIView.animate(withDuration: 0.5, animations: {
-            self.table.frame.origin.y+=200
-            self.table.alpha = 0.5
+            self.table.frame.origin.y = self.updating!.frame.maxY+20
+            self.table.alpha = 0.25
             self.updating?.alpha = 1
         }) { (finished) in
             if finished {
@@ -153,8 +154,8 @@ class ViewController: UIViewController,UITableViewDelegate,UITableViewDataSource
         self.isReloadingHistory = true
         updatingLabel("UPDATING HISTORY")
         UIView.animate(withDuration: 0.5, animations: {
-            self.table.frame.origin.y+=200
-            self.table.alpha = 0.5
+            self.table.frame.origin.y = self.updating!.frame.maxY+20
+            self.table.alpha = 0.25
             self.updating?.alpha = 1
         }) { (finished) in
             if finished {
@@ -340,6 +341,7 @@ class ViewController: UIViewController,UITableViewDelegate,UITableViewDataSource
     }
     
     var headerEffectView:UIVisualEffectView?
+    var border:CALayer?
     
     func tableView(_ tableView: UITableView, viewForHeaderInSection section: Int) -> UIView? {
         if section == 1 && !self.model.predictions.isEmpty {
@@ -347,10 +349,10 @@ class ViewController: UIViewController,UITableViewDelegate,UITableViewDataSource
             headerEffectView = UIVisualEffectView.init(effect: UIBlurEffect.init(style: .systemChromeMaterial))
             headerEffectView?.alpha = 0
             headerEffectView?.frame = view.bounds
-            let border = CALayer()
-            border.frame = CGRect.init(x: 0, y: view.frame.size.height-1, width: view.frame.size.width, height: 1)
-            border.backgroundColor = UIColor.systemGray4.cgColor
-            headerEffectView?.layer.addSublayer(border)
+            border = CALayer()
+            border?.frame = CGRect.init(x: 0, y: view.frame.size.height-1, width: view.frame.size.width, height: 1)
+            border?.backgroundColor = UIColor.separator.cgColor
+            headerEffectView?.layer.addSublayer(border!)
             view.addSubview(headerEffectView!)
 //
 //            let title = UILabel.init(frame: CGRect.init(origin: CGPoint.init(x: 0, y: 20), size: CGSize.init(width: tableView.frame.size.width, height: 24)))
@@ -396,6 +398,16 @@ class ViewController: UIViewController,UITableViewDelegate,UITableViewDataSource
     
     func numberOfSections(in tableView: UITableView) -> Int {
         return 2
+    }
+    
+    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+        if !isReloadingModel && !isReloadingHistory && current != nil {
+            self.table.beginUpdates()
+            self.table.reloadRows(at: [IndexPath.init(row: 1, section: 0)], with: .fade)
+            self.border?.backgroundColor = UIColor.separator.cgColor
+            self.table.endUpdates()
+        }
+        
     }
 
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
@@ -449,7 +461,11 @@ class ViewController: UIViewController,UITableViewDelegate,UITableViewDataSource
              
              switch indexPath.row {
              case 1:
-                 card.backgroundColor = self.current!.prediction > self.current!.open ? UIColor.systemGreen : UIColor.systemRed
+                card.backgroundColor = self.current!.prediction > self.current!.open ? UIColor.systemGreen : UIColor.systemRed
+                if traitCollection.userInterfaceStyle == .dark {
+                    card.backgroundColor = card.backgroundColor?.withAlphaComponent(0.25)
+                }
+                 
                  self.predictionColor = card.backgroundColor
                  type.text = "PREDICTION"
                  price.text = "$\(self.current!.prediction.rounded(toPlaces: 2))"
