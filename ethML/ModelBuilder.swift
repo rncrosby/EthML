@@ -41,7 +41,7 @@ class ModelBuilder: NSObject {
             delegate?.localModelPrepared()
         } catch {
             print("No local model, retrieving it.")
-            updateModel(url: "https://github.com/rncrosby/rncrosby.github.io/raw/master/eth/latest.mlmodel")
+            updateModel(url: "https://github.com/rncrosby/ethML/raw/master/latest.mlmodel")
         }
     }
 
