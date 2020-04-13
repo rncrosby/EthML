@@ -19,10 +19,12 @@ struct Point {
     var oneday: Double
     var sevenday: Double
     var thirtyday: Double
+    
 }
 
 class ViewController: UIViewController,UITableViewDelegate,UITableViewDataSource,ModelProtocol {
     
+    var predictionColor:UIColor?
     var model = ModelBuilder()
     var current:Point?
     var table:UITableView
@@ -34,7 +36,7 @@ class ViewController: UIViewController,UITableViewDelegate,UITableViewDataSource
         super.init(nibName: nil, bundle: nil)
         self.view.backgroundColor = .systemBackground
         self.table.frame = self.view.bounds
-        
+        self.table.clipsToBounds = false
     }
     
     required init?(coder aDecoder: NSCoder) {
@@ -48,6 +50,7 @@ class ViewController: UIViewController,UITableViewDelegate,UITableViewDataSource
     }
     
     override func viewDidLoad() {
+        
         model.delegate = self
         let refresh = UIRefreshControl()
         let rtitle = NSAttributedString.init(string: "RELOAD PRICE", attributes: [NSAttributedString.Key.font : UIFont.monospacedSystemFont(ofSize: 12, weight: .regular)])
@@ -59,7 +62,8 @@ class ViewController: UIViewController,UITableViewDelegate,UITableViewDataSource
         self.table.refreshControl = refresh
         self.table.dataSource = self
         self.table.separatorStyle = .none
-        self.table.scrollIndicatorInsets = UIEdgeInsets.init(top: self.view.safeAreaInsets.top+240+200+108, left: 0, bottom: 0, right: 0)
+        self.table.backgroundColor = .clear
+//        self.table.scrollIndicatorInsets = UIEdgeInsets.init(top: self.view.safeAreaInsets.top+240+200+108, left: 0, bottom: 0, right: 0)
         self.view.addSubview(self.table)
         super.viewDidLoad()
         model.initializeModel()
@@ -95,11 +99,14 @@ class ViewController: UIViewController,UITableViewDelegate,UITableViewDataSource
             if self.isReloadingHistory {
                 self.isReloadingHistory = false
                 self.table.reloadData()
-                UIView.animate(withDuration: 1, animations: {
-                    self.table.transform = CGAffineTransform.init(scaleX: 1, y: 1)
+                UIView.animate(withDuration: 0.5, animations: {
+                    self.table.frame.origin.y = 0
                     self.table.alpha = 1
+                    self.updating?.alpha = 0
                 }) { (done) in
                     if done {
+                        self.updating?.removeFromSuperview()
+                        self.updating = nil
                         self.table.isUserInteractionEnabled = true
       
                     }
@@ -111,14 +118,27 @@ class ViewController: UIViewController,UITableViewDelegate,UITableViewDataSource
     }
     var isReloadingModel = false
     var isReloadingHistory = false
+    var updating:UILabel?
+    
+    func updatingLabel(_ message: String) {
+        updating = UILabel.init(frame: CGRect.init(origin: CGPoint.init(x: 0, y: self.view.safeAreaInsets.top+20), size: CGSize.init(width: self.view.frame.size.width, height: 50)))
+        updating?.font = .monospacedSystemFont(ofSize: 12, weight: .regular)
+        updating?.textColor = .label
+        updating?.textAlignment = .center
+        updating?.text = message
+        updating?.alpha = 0
+        self.view.addSubview(updating!)
+        self.view.sendSubviewToBack(updating!)
+    }
     
     @objc func startUpdateModel() {
         self.table.isUserInteractionEnabled = false
         self.isReloadingModel = true
-        UIView.animate(withDuration: 1, animations: {
-            self.table.frame.origin.y = -1*(self.table.contentOffset.y)
-            self.table.transform = CGAffineTransform.init(scaleX: 0.8, y: 0.8)
+        updatingLabel("RETRAINING MODEL")
+        UIView.animate(withDuration: 0.5, animations: {
+            self.table.frame.origin.y+=200
             self.table.alpha = 0.5
+            self.updating?.alpha = 1
         }) { (finished) in
             if finished {
                 self.model.updateModel(url: "https://github.com/rncrosby/rncrosby.github.io/raw/master/eth/latest.mlmodel")
@@ -131,10 +151,11 @@ class ViewController: UIViewController,UITableViewDelegate,UITableViewDataSource
     @objc func startUpdateHistory() {
         self.table.isUserInteractionEnabled = false
         self.isReloadingHistory = true
-        UIView.animate(withDuration: 1, animations: {
-            self.table.frame.origin.y = -1*(self.table.contentOffset.y)
-            self.table.transform = CGAffineTransform.init(scaleX: 0.8, y: 0.8)
+        updatingLabel("UPDATING HISTORY")
+        UIView.animate(withDuration: 0.5, animations: {
+            self.table.frame.origin.y+=200
             self.table.alpha = 0.5
+            self.updating?.alpha = 1
         }) { (finished) in
             if finished {
                 self.model.updateHistoricalData()
@@ -244,12 +265,14 @@ class ViewController: UIViewController,UITableViewDelegate,UITableViewDataSource
                         if self.isReloadingModel {
                             self.isReloadingModel = false
                             self.table.reloadData()
-                            UIView.animate(withDuration: 1, animations: {
-                                self.table.transform = CGAffineTransform.init(scaleX: 1, y: 1)
+                            UIView.animate(withDuration: 0.5, animations: {
+                                self.table.frame.origin.y = 0
                                 self.table.alpha = 1
-                                self.table.reloadData()
+                                self.updating?.alpha = 0
                             }) { (done) in
                                 if done {
+                                    self.updating?.removeFromSuperview()
+                                    self.updating = nil
                                     self.table.isUserInteractionEnabled = true
                                     completion(true)
                                 }
@@ -404,7 +427,7 @@ class ViewController: UIViewController,UITableViewDelegate,UITableViewDataSource
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         if indexPath.section == 0 {
             let cell = UITableViewCell.init(style: .default, reuseIdentifier: "PriceCell")
-//            cell.backgroundColor = .systemGray6
+            cell.backgroundColor = .clear
             cell.clipsToBounds = false
             cell.selectionStyle = .none
             let card = UIView.init(frame: CGRect.init(x: 20, y: 20, width: tableView.frame.size.width-40, height: heightForRow(row: indexPath.row)-30))
@@ -427,6 +450,7 @@ class ViewController: UIViewController,UITableViewDelegate,UITableViewDataSource
              switch indexPath.row {
              case 1:
                  card.backgroundColor = self.current!.prediction > self.current!.open ? UIColor.systemGreen : UIColor.systemRed
+                 self.predictionColor = card.backgroundColor
                  type.text = "PREDICTION"
                  price.text = "$\(self.current!.prediction.rounded(toPlaces: 2))"
                  price.textColor = .white
