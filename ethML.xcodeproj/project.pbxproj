@@ -7,8 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		D46EB4322441509B000C45B0 /* eth_final.csv in Resources */ = {isa = PBXBuildFile; fileRef = D46EB4312441509B000C45B0 /* eth_final.csv */; };
-		D4CD236424404BAE00A3EDAA /* BoostedTree.mlmodel in Sources */ = {isa = PBXBuildFile; fileRef = D4CD236324404BAE00A3EDAA /* BoostedTree.mlmodel */; };
+		D4B096EB244390EB00F580C1 /* ModelBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4B096EA244390EB00F580C1 /* ModelBuilder.swift */; };
 		D4E919E2244008E200F3E6B1 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4E919E1244008E200F3E6B1 /* AppDelegate.swift */; };
 		D4E919E4244008E200F3E6B1 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4E919E3244008E200F3E6B1 /* SceneDelegate.swift */; };
 		D4E919E6244008E200F3E6B1 /* ViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4E919E5244008E200F3E6B1 /* ViewController.swift */; };
@@ -18,8 +17,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		D46EB4312441509B000C45B0 /* eth_final.csv */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; name = eth_final.csv; path = ../../eth_final.csv; sourceTree = "<group>"; };
-		D4CD236324404BAE00A3EDAA /* BoostedTree.mlmodel */ = {isa = PBXFileReference; lastKnownFileType = file.mlmodel; path = BoostedTree.mlmodel; sourceTree = "<group>"; };
+		D4B096EA244390EB00F580C1 /* ModelBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelBuilder.swift; sourceTree = "<group>"; };
 		D4E919DE244008E200F3E6B1 /* ethML.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ethML.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		D4E919E1244008E200F3E6B1 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		D4E919E3244008E200F3E6B1 /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
@@ -67,8 +65,7 @@
 				D4E919EA244008E200F3E6B1 /* Assets.xcassets */,
 				D4E919EC244008E200F3E6B1 /* LaunchScreen.storyboard */,
 				D4E919EF244008E200F3E6B1 /* Info.plist */,
-				D46EB4312441509B000C45B0 /* eth_final.csv */,
-				D4CD236324404BAE00A3EDAA /* BoostedTree.mlmodel */,
+				D4B096EA244390EB00F580C1 /* ModelBuilder.swift */,
 			);
 			path = ethML;
 			sourceTree = "<group>";
@@ -133,7 +130,6 @@
 			files = (
 				D4E919EE244008E200F3E6B1 /* LaunchScreen.storyboard in Resources */,
 				D4E919EB244008E200F3E6B1 /* Assets.xcassets in Resources */,
-				D46EB4322441509B000C45B0 /* eth_final.csv in Resources */,
 				D4E919E9244008E200F3E6B1 /* Main.storyboard in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -145,10 +141,10 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D4B096EB244390EB00F580C1 /* ModelBuilder.swift in Sources */,
 				D4E919E6244008E200F3E6B1 /* ViewController.swift in Sources */,
 				D4E919E2244008E200F3E6B1 /* AppDelegate.swift in Sources */,
 				D4E919E4244008E200F3E6B1 /* SceneDelegate.swift in Sources */,
-				D4CD236424404BAE00A3EDAA /* BoostedTree.mlmodel in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

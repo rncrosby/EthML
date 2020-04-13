@@ -21,28 +21,15 @@ struct Point {
     var thirtyday: Double
 }
 
-struct HistoricalPrediction {
-    var date: String
-    var open: Double
-    var actual: Double
-    var predicted: Double
-}
-
-class ViewController: UIViewController,UITableViewDelegate,UITableViewDataSource {
+class ViewController: UIViewController,UITableViewDelegate,UITableViewDataSource,ModelProtocol {
     
-    
-    
+    var model = ModelBuilder()
     var current:Point?
-    var currentView:CurrentView?
-    var predictionView:PredictionView?
     var table:UITableView
-    var historical = [HistoricalPrediction]()
     var scrollIndicator:UIImageView?
     
     init() {
         self.table = UITableView.init()
-//        self.scroll = UIScrollView.init()
-        
         self.table.backgroundColor = .clear
         super.init(nibName: nil, bundle: nil)
         self.view.backgroundColor = .systemBackground
@@ -52,7 +39,6 @@ class ViewController: UIViewController,UITableViewDelegate,UITableViewDataSource
     
     required init?(coder aDecoder: NSCoder) {
         self.table = UITableView()
-        
        super.init(coder: aDecoder)
     }
     
@@ -62,22 +48,11 @@ class ViewController: UIViewController,UITableViewDelegate,UITableViewDataSource
     }
     
     override func viewDidLoad() {
-//        self.scroll.frame = self.view.bounds
-//        self.scroll.contentSize = self.view.bounds.size
-//        self.scroll.alwaysBounceVertical = true
-//        self.scroll.showsVerticalScrollIndicator = false
-//
-//        currentView = CurrentView.init(frame: CGRect.init(origin: CGPoint.init(x: 20, y: self.view.center.y), size: CGSize.init(width: self.view.frame.size.width-40, height: 240)))
-//        predictionView = PredictionView.init(frame: CGRect.init(origin: CGPoint.init(x: 20, y: (currentView?.frame.maxY)!+20), size: CGSize.init(width: self.view.frame.size.width-40, height: 200)))
-//
-//        self.scroll.addSubview(self.currentView!)
-//        self.scroll.addSubview(self.predictionView!)
-//
-//        self.view.addSubview(self.scroll)
-        
-        
+        model.delegate = self
         let refresh = UIRefreshControl()
-        refresh.attributedTitle = NSAttributedString.init(string: "Refresh current price...")
+        let rtitle = NSAttributedString.init(string: "RELOAD PRICE", attributes: [NSAttributedString.Key.font : UIFont.monospacedSystemFont(ofSize: 12, weight: .regular)])
+        
+        refresh.attributedTitle = rtitle
         refresh.addTarget(self, action: #selector(reloadPrice(sender:)), for: .valueChanged)
         self.navigationController?.navigationBar.isHidden = true
         self.table.delegate = self
@@ -86,18 +61,86 @@ class ViewController: UIViewController,UITableViewDelegate,UITableViewDataSource
         self.table.separatorStyle = .none
         self.table.scrollIndicatorInsets = UIEdgeInsets.init(top: self.view.safeAreaInsets.top+240+200+108, left: 0, bottom: 0, right: 0)
         self.view.addSubview(self.table)
-        
-
         super.viewDidLoad()
+        model.initializeModel()
+        
+        // Do any additional setup after loading the view.
+    }
+    
+    func initializePrediction() {
         getCurrentPrice { (success) in
             if success {
                 print("done with current price")
             } else {
                 print("error fetching current price")
             }
-            self.getHistoricalData()
+            self.model.initializeHistoricalData()
         }
-        // Do any additional setup after loading the view.
+    }
+    
+    func localModelPrepared() {
+        print("local model ready")
+        
+        initializePrediction()
+    }
+    
+    func remoteModelPrepared() {
+        print("remote model ready")
+        initializePrediction()
+    }
+    
+    func historicalDataPrepared() {
+        DispatchQueue.main.async {
+            self.table.reloadData()
+            if self.isReloadingHistory {
+                self.isReloadingHistory = false
+                self.table.reloadData()
+                UIView.animate(withDuration: 1, animations: {
+                    self.table.transform = CGAffineTransform.init(scaleX: 1, y: 1)
+                    self.table.alpha = 1
+                }) { (done) in
+                    if done {
+                        self.table.isUserInteractionEnabled = true
+      
+                    }
+                    
+                }
+            }
+            
+        }
+    }
+    var isReloadingModel = false
+    var isReloadingHistory = false
+    
+    @objc func startUpdateModel() {
+        self.table.isUserInteractionEnabled = false
+        self.isReloadingModel = true
+        UIView.animate(withDuration: 1, animations: {
+            self.table.frame.origin.y = -1*(self.table.contentOffset.y)
+            self.table.transform = CGAffineTransform.init(scaleX: 0.8, y: 0.8)
+            self.table.alpha = 0.5
+        }) { (finished) in
+            if finished {
+                self.model.updateModel(url: "https://github.com/rncrosby/rncrosby.github.io/raw/master/eth/latest.mlmodel")
+            }
+        }
+        
+        
+    }
+    
+    @objc func startUpdateHistory() {
+        self.table.isUserInteractionEnabled = false
+        self.isReloadingHistory = true
+        UIView.animate(withDuration: 1, animations: {
+            self.table.frame.origin.y = -1*(self.table.contentOffset.y)
+            self.table.transform = CGAffineTransform.init(scaleX: 0.8, y: 0.8)
+            self.table.alpha = 0.5
+        }) { (finished) in
+            if finished {
+                self.model.updateHistoricalData()
+//                self.model.updateModel(url: "https://github.com/rncrosby/rncrosby.github.io/raw/master/eth/latest.mlmodel")
+            }
+        }
     }
     
     var navblur:UIVisualEffectView?
@@ -139,29 +182,25 @@ class ViewController: UIViewController,UITableViewDelegate,UITableViewDataSource
     @objc func reloadPrice(sender: UIRefreshControl) {
         getPrice { (response) in
             if let result = response {
-                do {
-                    let oneHour = result["1h"] as! NSDictionary
-                    let oneHourPriceChange = (oneHour["price_change"] as! NSString).doubleValue
-                    let oneDay = result["1d"] as! NSDictionary
-                    let oneDayPriceChange = (oneDay["price_change"] as! NSString).doubleValue
-                    let sevenDay = result["7d"] as! NSDictionary
-                    let sevenDayPriceChange = (sevenDay["price_change"] as! NSString).doubleValue
-                    let thirtyDay = result["30d"] as! NSDictionary
-                    let thirtyDayPriceChange = (thirtyDay["price_change"] as! NSString).doubleValue
-                    let capChange = (oneDay["market_cap_change_pct"] as! NSString).doubleValue
-                    let priceChange = (oneDay["price_change_pct"] as! NSString).doubleValue
-                    let volumeChange = (oneDay["volume_change_pct"] as! NSString).doubleValue
-                    let cap = (result["market_cap"] as! NSString).doubleValue
-                    let price = (result["price"] as! NSString).doubleValue
-                    let prediction = try self.testPrediction(open: price, cap: cap, priceChange: priceChange, volumeChange: volumeChange, capChange: capChange)
-                    self.current = Point.init(prediction: prediction, open: price, cap: cap, value_change: priceChange, volume_change: volumeChange, cap_change: capChange,onehour: oneHourPriceChange, oneday: oneDayPriceChange, sevenday: sevenDayPriceChange, thirtyday: thirtyDayPriceChange)
+                let oneHour = result["1h"] as! NSDictionary
+                let oneHourPriceChange = (oneHour["price_change"] as! NSString).doubleValue
+                let oneDay = result["1d"] as! NSDictionary
+                let oneDayPriceChange = (oneDay["price_change"] as! NSString).doubleValue
+                let sevenDay = result["7d"] as! NSDictionary
+                let sevenDayPriceChange = (sevenDay["price_change"] as! NSString).doubleValue
+                let thirtyDay = result["30d"] as! NSDictionary
+                let thirtyDayPriceChange = (thirtyDay["price_change"] as! NSString).doubleValue
+                let capChange = (oneDay["market_cap_change_pct"] as! NSString).doubleValue
+                let priceChange = (oneDay["price_change_pct"] as! NSString).doubleValue
+                let volumeChange = (oneDay["volume_change_pct"] as! NSString).doubleValue
+                let cap = (result["market_cap"] as! NSString).doubleValue
+                let price = (result["price"] as! NSString).doubleValue
+                let prediction = self.model.makePrediction(open: price, cap: cap, priceChange: priceChange, volumeChange: volumeChange, capChange: capChange)
+                self.current = Point.init(prediction: prediction!, open: price, cap: cap, value_change: priceChange, volume_change: volumeChange, cap_change: capChange,onehour: oneHourPriceChange, oneday: oneDayPriceChange, sevenday: sevenDayPriceChange, thirtyday: thirtyDayPriceChange)
 //                    self.getHistoricalData(refresh: true)
-                    DispatchQueue.main.async {
-                        self.table.reloadData()
-                        sender.endRefreshing()
-                    }
-                } catch {
-                    print("error")
+                DispatchQueue.main.async {
+                    self.table.reloadData()
+                    sender.endRefreshing()
                 }
             } else {
                 print("No response?")
@@ -175,34 +214,50 @@ class ViewController: UIViewController,UITableViewDelegate,UITableViewDataSource
     func getCurrentPrice(completion: @escaping (Bool) -> ()) {
         getPrice { (response) in
             if let result = response {
-                do {
-                    let oneHour = result["1h"] as! NSDictionary
-                    let oneHourPriceChange = (oneHour["price_change"] as! NSString).doubleValue
-                    let oneDay = result["1d"] as! NSDictionary
-                    let oneDayPriceChange = (oneDay["price_change"] as! NSString).doubleValue
-                    let sevenDay = result["7d"] as! NSDictionary
-                    let sevenDayPriceChange = (sevenDay["price_change"] as! NSString).doubleValue
-                    let thirtyDay = result["30d"] as! NSDictionary
-                    let thirtyDayPriceChange = (thirtyDay["price_change"] as! NSString).doubleValue
-                    let capChange = (oneDay["market_cap_change_pct"] as! NSString).doubleValue
-                    let priceChange = (oneDay["price_change_pct"] as! NSString).doubleValue
-                    let volumeChange = (oneDay["volume_change_pct"] as! NSString).doubleValue
-                    let cap = (result["market_cap"] as! NSString).doubleValue
-                    let price = (result["price"] as! NSString).doubleValue
-                    let prediction = try self.testPrediction(open: price, cap: cap, priceChange: priceChange, volumeChange: volumeChange, capChange: capChange)
-                    self.current = Point.init(prediction: prediction, open: price, cap: cap, value_change: priceChange, volume_change: volumeChange, cap_change: capChange,onehour: oneHourPriceChange, oneday: oneDayPriceChange, sevenday: sevenDayPriceChange, thirtyday: thirtyDayPriceChange)
-                    DispatchQueue.main.async {
-                        if !self.loaded {
-                            self.loaded = true
-                            self.table.beginUpdates()
-                            self.table.insertRows(at: [IndexPath.init(row: 0, section: 0), IndexPath.init(row: 1, section: 0)], with: .fade)
-                            self.table.endUpdates()
-                            completion(true)
+                let oneHour = result["1h"] as! NSDictionary
+                let oneHourPriceChange = (oneHour["price_change"] as! NSString).doubleValue
+                let oneDay = result["1d"] as! NSDictionary
+                let oneDayPriceChange = (oneDay["price_change"] as! NSString).doubleValue
+                let sevenDay = result["7d"] as! NSDictionary
+                let sevenDayPriceChange = (sevenDay["price_change"] as! NSString).doubleValue
+                let thirtyDay = result["30d"] as! NSDictionary
+                let thirtyDayPriceChange = (thirtyDay["price_change"] as! NSString).doubleValue
+                let capChange = (oneDay["market_cap_change_pct"] as! NSString).doubleValue
+                let priceChange = (oneDay["price_change_pct"] as! NSString).doubleValue
+                let volumeChange = (oneDay["volume_change_pct"] as! NSString).doubleValue
+                let cap = (result["market_cap"] as! NSString).doubleValue
+                let price = (result["price"] as! NSString).doubleValue
+                let prediction = self.model.makePrediction(open: price, cap: cap, priceChange: priceChange, volumeChange: volumeChange, capChange: capChange)
+                if prediction != nil {
+                    self.current = Point.init(prediction: prediction!, open: price, cap: cap, value_change: priceChange, volume_change: volumeChange, cap_change: capChange,onehour: oneHourPriceChange, oneday: oneDayPriceChange, sevenday: sevenDayPriceChange, thirtyday: thirtyDayPriceChange)
+                } else {
+                    self.current = Point.init(prediction: price, open: price, cap: cap, value_change: priceChange, volume_change: volumeChange, cap_change: capChange,onehour: oneHourPriceChange, oneday: oneDayPriceChange, sevenday: sevenDayPriceChange, thirtyday: thirtyDayPriceChange)
+                }
+                DispatchQueue.main.async {
+                    if !self.loaded {
+                        self.loaded = true
+                        self.table.beginUpdates()
+                        self.table.insertRows(at: [IndexPath.init(row: 0, section: 0), IndexPath.init(row: 1, section: 0)], with: .fade)
+                        self.table.endUpdates()
+                        completion(true)
+                    } else {
+                        if self.isReloadingModel {
+                            self.isReloadingModel = false
+                            self.table.reloadData()
+                            UIView.animate(withDuration: 1, animations: {
+                                self.table.transform = CGAffineTransform.init(scaleX: 1, y: 1)
+                                self.table.alpha = 1
+                                self.table.reloadData()
+                            }) { (done) in
+                                if done {
+                                    self.table.isUserInteractionEnabled = true
+                                    completion(true)
+                                }
+                                
+                            }
                         }
                         
                     }
-                } catch {
-                    completion(false)
                 }
             } else {
                 print("No response?")
@@ -210,49 +265,6 @@ class ViewController: UIViewController,UITableViewDelegate,UITableViewDataSource
             }
             
         }
-    }
-    
-    func getHistoricalData(refresh: Bool=false) {
-        do {
-            let path = Bundle.main.path(forResource: "eth_final", ofType: "csv") // file path for file "data.txt"
-            let string = try String(contentsOfFile: path!, encoding: String.Encoding.utf8)
-            let data = string.components(separatedBy: "\n")
-            var randoms = [Int]()
-            var count = 0
-            while count < 20 {
-                    randoms.append(count)
-                    count+=1
-                    let parsed = data[count].components(separatedBy: ",")
-                    let d = parsed[0]
-                    let open = Double.init(parsed[1])
-                    let close = Double.init(parsed[2])
-                    let cap = Double.init(parsed[4])
-                    let value_change = Double.init(parsed[5])
-                    let volume_change = Double.init(parsed[6])
-                    let cap_change = Double.init(parsed[6])
-                    let prediction = try testPrediction(open: open!, cap: cap!, priceChange: value_change!, volumeChange: volume_change!, capChange: cap_change!)
-                    self.historical.append(HistoricalPrediction.init(date: d, open: open!, actual: close!, predicted: prediction))
-//                }
-            }
-            if !refresh {
-                self.table.beginUpdates()
-                self.table.insertRows(at: randoms.enumerated().map({ (index, row) -> IndexPath in
-                    return IndexPath.init(row: index, section: 1)
-                }), with: .top)
-                self.table.endUpdates()
-            }
-            
-        } catch {
-            print(error)
-        }
-    }
-    
-    let eth = BoostedTree()
-    
-    func testPrediction(open: Double, cap: Double, priceChange: Double, volumeChange: Double, capChange: Double) throws -> Double {
-        let prediction = try eth.prediction(open: open, cap: cap, open_change: priceChange, volume_change: volumeChange, cap_change: capChange)
-        return prediction.close
-//        print("Actual: \(actual) | Predicted: \(prediction.close)")
     }
     
     func getPrice(completion: @escaping (NSDictionary?) -> ())  {
@@ -298,7 +310,7 @@ class ViewController: UIViewController,UITableViewDelegate,UITableViewDataSource
     func tableView(_ tableView: UITableView, heightForHeaderInSection section: Int) -> CGFloat {
         switch section {
         case 1:
-            return historical.isEmpty ? 0 : 108
+            return model.predictions.isEmpty ? 0 : 128
         default:
             return 0
         }
@@ -307,8 +319,8 @@ class ViewController: UIViewController,UITableViewDelegate,UITableViewDataSource
     var headerEffectView:UIVisualEffectView?
     
     func tableView(_ tableView: UITableView, viewForHeaderInSection section: Int) -> UIView? {
-        if section == 1 && !self.historical.isEmpty {
-            let view = UIView.init(frame: CGRect.init(origin: CGPoint.zero, size: CGSize.init(width: tableView.frame.size.width, height: 108)))
+        if section == 1 && !self.model.predictions.isEmpty {
+            let view = UIView.init(frame: CGRect.init(origin: CGPoint.zero, size: CGSize.init(width: tableView.frame.size.width, height: 128)))
             headerEffectView = UIVisualEffectView.init(effect: UIBlurEffect.init(style: .systemChromeMaterial))
             headerEffectView?.alpha = 0
             headerEffectView?.frame = view.bounds
@@ -317,17 +329,35 @@ class ViewController: UIViewController,UITableViewDelegate,UITableViewDataSource
             border.backgroundColor = UIColor.systemGray4.cgColor
             headerEffectView?.layer.addSublayer(border)
             view.addSubview(headerEffectView!)
-            
-            let title = UILabel.init(frame: CGRect.init(origin: CGPoint.init(x: 0, y: 20), size: CGSize.init(width: tableView.frame.size.width, height: 24)))
-            title.font = .monospacedSystemFont(ofSize: 20, weight: .regular)
-            title.text = "Past Predictions"
-            title.textAlignment = .center
-            title.textColor = .label
-            view.addSubview(title)
-            
-            let width = ((self.view.frame.size.width-20)/5)
-            for (index,title) in ["","OPEN","PRED.","ACTUAL","SCORE"].enumerated() {
-                let label = UILabel.init(frame: CGRect.init(origin: CGPoint.init(x: 20+(Int(width)*index), y: 44+20), size: CGSize.init(width: width, height: 24)))
+//
+//            let title = UILabel.init(frame: CGRect.init(origin: CGPoint.init(x: 0, y: 20), size: CGSize.init(width: tableView.frame.size.width, height: 24)))
+//            title.font = .monospacedSystemFont(ofSize: 20, weight: .regular)
+//            title.text = "Past Predictions"
+//            title.textAlignment = .center
+//            title.textColor = .label
+//            view.addSubview(title)
+            let updateHistory = UIButton.init(frame: CGRect.init(origin: CGPoint.init(x: 0, y: 20), size: CGSize.init(width: tableView.frame.size.width, height: 30)))
+            let needUpdate = self.checkLastTimeUpdated(type: "history")
+            if needUpdate.0 {
+                updateHistory.setTitle("UPDATE HISTORY", for: .normal)
+                updateHistory.addTarget(self, action: #selector(startUpdateHistory), for: .touchUpInside)
+            } else {
+                updateHistory.addTarget(self, action: #selector(startUpdateHistory), for: .touchUpInside)
+
+                updateHistory.setTitle("HISTORY", for: .normal)
+            }
+            updateHistory.titleLabel?.font = .monospacedSystemFont(ofSize: 12, weight: .regular)
+            updateHistory.setTitleColor(.label, for: .normal)
+            view.addSubview(updateHistory)
+            let lastupdate = UILabel.init(frame: CGRect.init(x: 40, y: updateHistory.frame.maxY, width: view.frame.size.width-80, height: 20))
+            lastupdate.text = needUpdate.1
+            lastupdate.font = .monospacedSystemFont(ofSize: 8, weight: .regular)
+            lastupdate.textAlignment = .center
+            lastupdate.textColor = .systemGray2
+            view.addSubview(lastupdate)
+            let width = ((self.view.frame.size.width-20)/4)
+            for (index,title) in ["","open","pred.","actual"].enumerated() {
+                let label = UILabel.init(frame: CGRect.init(origin: CGPoint.init(x: 20+(Int(width)*index), y: 44+20+20), size: CGSize.init(width: width, height: 24)))
                     label.textAlignment = .left
                 
                 label.text = title
@@ -350,14 +380,32 @@ class ViewController: UIViewController,UITableViewDelegate,UITableViewDataSource
         case 0:
             return current != nil ? 2 : 0
         default:
-            return historical.count
+            return model.predictions.count
+        }
+    }
+    
+    func checkLastTimeUpdated(type: String) -> (Bool, String) {
+        let lastUpdate = UserDefaults.standard.double(forKey: type)
+        let difference = Date.init().timeIntervalSinceReferenceDate - lastUpdate
+        if difference > 86400 {
+            let days = Int(difference / 86400)
+            return (true, "\(type) updated \(Int(days)) day\(days > 1 ? "s" : "" ) ago")
+        } else if difference > 3600 {
+            let hours = Int(difference / 3600)
+            return (false, "\(type) updated \(Int(hours)) hour\(hours > 1 ? "s" : "" ) ago")
+        } else if difference > 60 {
+            let minutes = Int(difference / 60)
+            return (false, "\(type) updated \(Int(minutes)) minute\(minutes > 1 ? "s" : "" ) ago")
+        } else {
+            return (false, "\(type) updated just now")
         }
     }
     
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         if indexPath.section == 0 {
             let cell = UITableViewCell.init(style: .default, reuseIdentifier: "PriceCell")
-            cell.backgroundColor = .clear
+//            cell.backgroundColor = .systemGray6
+            cell.clipsToBounds = false
             cell.selectionStyle = .none
             let card = UIView.init(frame: CGRect.init(x: 20, y: 20, width: tableView.frame.size.width-40, height: heightForRow(row: indexPath.row)-30))
             card.layer.shadowColor = UIColor.black.cgColor
@@ -382,6 +430,29 @@ class ViewController: UIViewController,UITableViewDelegate,UITableViewDataSource
                  type.text = "PREDICTION"
                  price.text = "$\(self.current!.prediction.rounded(toPlaces: 2))"
                  price.textColor = .white
+                 let updateModel = UIButton.init(frame: CGRect.init(origin: CGPoint.init(x: 0, y: heightForRow(row: indexPath.row)-20-80), size: CGSize.init(width: card.frame.size.width, height: 30)))
+                 let modelStatus = checkLastTimeUpdated(type: "model")
+
+                 
+//                 if modelStatus.0 {
+                    updateModel.addTarget(self, action: #selector(startUpdateModel), for: .touchUpInside)
+                 
+                 updateModel.setTitle("UPDATE MODEL", for: .normal)
+                 updateModel.titleLabel?.font = .monospacedSystemFont(ofSize: 12, weight: .regular)
+                 updateModel.setTitleColor(.white, for: .normal)
+                 card.addSubview(updateModel)
+                
+                 let lastupdate = UILabel.init(frame: CGRect.init(x: 40, y: updateModel.frame.maxY, width: card.frame.size.width-80, height: 20))
+                 lastupdate.text = modelStatus.1
+                 lastupdate.font = .monospacedSystemFont(ofSize: 8, weight: .regular)
+                 lastupdate.textAlignment = .center
+                 lastupdate.textColor = .white
+                 card.addSubview(lastupdate)
+//                let updateHistory = UIButton.init(frame: CGRect.init(origin: CGPoint.init(x: card.frame.size.width/2, y: heightForRow(row: indexPath.row)-20-80), size: CGSize.init(width: card.frame.size.width/2, height: 60)))
+//                updateHistory.setTitle("UPDATE HISTORY", for: .normal)
+//                updateHistory.titleLabel?.font = .monospacedSystemFont(ofSize: 12, weight: .regular)
+//                updateHistory.setTitleColor(.white, for: .normal)
+//                card.addSubview(updateHistory)
              default:
                  card.backgroundColor = .darkText
                  let dfm = DateFormatter()
@@ -398,11 +469,13 @@ class ViewController: UIViewController,UITableViewDelegate,UITableViewDataSource
                  card.addSubview(sevenD)
                  card.addSubview(thirtyD)
              }
-             
+            cell.layer.zPosition = 1
              return cell
         } else {
             
+            
             let cell = UITableViewCell.init(style: .default, reuseIdentifier: "HistoricalCell")
+            cell.layer.zPosition = -1
             cell.selectionStyle = .none
             cell.backgroundColor = .clear
             let line = UIView.init(frame: CGRect.init(x: 0, y: 60-1, width: tableView.frame.size.width, height: 1))
@@ -435,36 +508,25 @@ class ViewController: UIViewController,UITableViewDelegate,UITableViewDataSource
     
     func heightForRow(row: Int) -> CGFloat {
         
-        return row == 0 ? 240 : 200
+        return 240
     }
-    
-//    func colorFromScore(score: Int) -> UIColor {
-//        if score > 95 {
-//            return .systemGreen
-//        } else if score > 90 {
-//            return UIColor.systemGreen.withAlphaComponent(0.5)
-//        } else if score > 80 {
-//            return UIColor.systemYellow
-//        } else {
-//            return UIColor.systemRed
-//        }
-//    }
 
     func historicalCell(index: Int) -> UIView {
+        let prediction = self.model.predictions[index]
         let view = UIView.init(frame: CGRect.init(origin: CGPoint.zero, size: CGSize.init(width: self.view.frame.size.width, height: 120)))
         view.backgroundColor = .clear
 //        let dfm = DateFormatter.init()
 //        dfm.dateFormat = "M/d/YY"
 //        let d = dfm.date(from: self.historical[index].date)
 //        dfm.dateFormat = "MMM d"
-        let width = ((self.view.frame.size.width-20)/5)
-        let date = valueChangeLabel(metric: self.historical[index].date, value: nil, origin: CGPoint.init(x: 20, y: 0), size: CGSize.init(width: width, height: 60), color: false, font: nil)
+        let width = ((self.view.frame.size.width-20)/4)
+        let date = valueChangeLabel(metric: String(prediction.date.replacingOccurrences(of: "\"", with: "").split(separator: ",")[0]), value: nil, origin: CGPoint.init(x: 20, y: 0), size: CGSize.init(width: width, height: 60), color: false, font: nil)
         date.textColor = .label
         date.textAlignment = .left
         view.addSubview(date)
         
-        let error = withinPercentError(predict: self.historical[index].predicted, actual: self.historical[index].actual)
-        for (index,value) in [self.historical[index].open,self.historical[index].predicted,self.historical[index].actual,error.0].enumerated() {
+        let error = withinPercentError(predict: prediction.predicted, actual: prediction.actual)
+        for (index,value) in [prediction.open,prediction.predicted,prediction.actual].enumerated() {
             let label = UILabel.init(frame: CGRect.init(origin: CGPoint.init(x: 20+(Int(width)*(index+1)), y: 0), size: CGSize.init(width: width, height: 60)))
             
             if index == 3 {
@@ -480,38 +542,6 @@ class ViewController: UIViewController,UITableViewDelegate,UITableViewDataSource
             label.font = .monospacedSystemFont(ofSize: 12, weight: .regular)
             view.addSubview(label)
         }
-        
-        
-        // chart
-//        let chart = UIView.init(frame: CGRect.init(x: 20, y: 60+10, width: width, height: 60-20))
-//        chart.clipsToBounds = true
-//        chart.backgroundColor = .systemGray5
-//        var actualSlope = (-1 * (self.historical[index].actual - self.historical[index].open))
-//        if actualSlope < -20 {
-//            actualSlope = -20
-//        } else if actualSlope > 20 {
-//            actualSlope = 20
-//        }
-//        let actualLayer = drawLine(origin: CGPoint.init(x: 0, y: chart.frame.size.height/2), distance: (width), slope: CGFloat(actualSlope), color: .darkText)
-//
-//        var predictionSlope = (-1 * (self.historical[index].predicted - self.historical[index].open))
-//        if predictionSlope < -20 {
-//            predictionSlope = -20
-//        } else if predictionSlope > 20 {
-//            predictionSlope = 20
-//        }
-//        let predictionLayer = drawLine(origin: CGPoint.init(x: 0, y: chart.frame.size.height/2), distance: (width), slope: CGFloat(predictionSlope), color: error.1 ? .systemGreen : .systemYellow)
-//        chart.layer.addSublayer(actualLayer)
-//        chart.layer.addSublayer(predictionLayer)
-//        view.addSubview(chart)
-//        // grade
-//        let gradeLabel = UILabel.init(frame: CGRect.init(x: view.frame.size.width-20-width, y: 60, width: width, height: 60))
-//        gradeLabel.font = .monospacedSystemFont(ofSize: 12, weight: .regular)
-//        gradeLabel.text = "\(Int(100-abs(error.0)))%"
-//        gradeLabel.textAlignment = .left
-//        view.addSubview(gradeLabel)
-//
-        
         return view
     }
     
